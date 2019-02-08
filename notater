@@ -14,3 +14,8 @@ assembly - god bolt
 laste ned libdwarf-20190110.tar.gz
 mv libdwarf-20190110.tar.gz libdwarf-20190110.tar
 tar xvf libdwarf-20190110.tar
+----
+
+Installation:
+sudo apt-get install libelf-dev
+sudo apt-get install libdwarf-dev
