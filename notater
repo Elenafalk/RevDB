@@ -1,0 +1,16 @@
+fredag 25 - kl 10:15
+
+Kjør programmet:
+- kompiler: g++ main.cpp -o main
+- kompiler: g++ test.cpp -o debuggee
+- kjør med arg: ./main debuggee
+
+Kan lønne seg å debugge en assembly-fil for færre instrukser
+Det blir renere enn cpp
+
+assembly - god bolt
+
+-----
+laste ned libdwarf-20190110.tar.gz
+mv libdwarf-20190110.tar.gz libdwarf-20190110.tar
+tar xvf libdwarf-20190110.tar
