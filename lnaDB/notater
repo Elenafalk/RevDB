@@ -1,0 +1,69 @@
+Kjør programmet:
+- kompiler: g++ main.cpp -o main
+- kompiler: g++ test.cpp -o debuggee
+- kjør med arg: ./main debuggee
+
+Har en assembly fil å jobbe mot. Kjøres slik:
+$ nasm -f elf64 -o hello.o hello.s
+$ ld -o hello hello.o
+$ ./hello
+Hello, world!
+
+Kan lønne seg å debugge en assembly-fil for færre instrukser
+Det blir renere enn cpp
+Gjøres slik:
+g++ main.cpp -o main
+nasm -f elf64 -o hello.o hello.s
+ld -o hello hello.o
+./main hello
+
+kan dobbeltsjekke output ved å disassembly assembly-fila:
+objdump -d hello
+
+DWARF: kompileres med -ldwarf flag
+g++ main.cpp -o main -ldwarf
+(kan behøve -lelf:g++ main.cpp -o main -ldwarf)
+no siblings hvis ikke kompilert med -g, prøver -gdwarf
+g++ stuff.cpp -o stuff -gdwarf
+kjør med executable argument "stuff"
+./main stuff
+
+avhengigheter:
+- nasm
+- elf?
+- g++?
+
+assembly - god bolt
+
+lnaDB:
+g++ debuggee.cpp -gdwarf -o debuggee -no-pie //kompiler testfil, FUCK PIE
+objdump --dwarf=info debuggee //se info
+g++ main.cpp debugger.cpp breakpoint.cpp -ldwarf -o main //kompiler alt sammen
+./main debuggee //kjør med testfil som argument
+
+
+ELF:
+readelf -h debuggee //jukse for å finne addresse
+
+-----
+laste ned libdwarf-20190110.tar.gz
+mv libdwarf-20190110.tar.gz libdwarf-20190110.tar
+tar xvf libdwarf-20190110.tar
+----
+
+Installation:
+sudo apt-get install libelf-dev
+sudo apt-get install libdwarf-dev
+
+zip:
+tar -czvf archive.tar.gz stuff
+unzip:
+tar -xzvf archive.tar.gz
+
+~DEBUGGER~
+oppgaver:
+- liste alle variabler
+- liste alle variablers verdier
+- liste alle funksjoner
+
+

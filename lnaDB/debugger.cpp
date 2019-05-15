@@ -1,11 +1,13 @@
 #include "debugger.hpp"
 #include "breakpoint.hpp"
+#include "dwarf_function_information.hpp"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <iostream>
 #include <libdwarf/dwarf.h>
 #include <libdwarf/libdwarf.h>
+#include <list>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -24,6 +26,97 @@
 using namespace std;
 
 Debugger::Debugger() {}
+
+Dwarf_function_information Debugger::db_find_function(Dwarf_Die the_die) {
+  char *die_name = 0;
+  const char *tag_name = 0;
+  Dwarf_Error err;
+  Dwarf_Half tag;
+  Dwarf_Attribute *attrs;
+  Dwarf_Addr lowpc;
+  list<Dwarf_Addr> addresses;
+  Dwarf_Signed attrcount, i;
+  int rc = dwarf_diename(the_die, &die_name, &err);
+  Dwarf_function_information df = Dwarf_function_information(0, 0);
+
+  if (rc == DW_DLV_ERROR)
+    db_print("Error: DWARF DIE name");
+  else if (rc == DW_DLV_NO_ENTRY) { //Return if no entry
+    return df;
+  }
+
+  if (dwarf_tag(the_die, &tag, &err) != DW_DLV_OK)
+    db_print("Error: DWARF TAG");
+
+  //Return if it's not a subprogram(aka function)
+  if (tag != DW_TAG_subprogram) {
+    return df;
+  }
+
+  //Error with name of function
+  if (dwarf_get_TAG_name(tag, &tag_name) != DW_DLV_OK)
+    db_print("Error: DWARF TAG name");
+
+  //Get the attributes of the DIE
+  if (dwarf_attrlist(the_die, &attrs, &attrcount, &err) != DW_DLV_OK)
+    db_print("Error: DWARF attrlist");
+
+  //Determine the address of the function
+  for (i = 0; i < attrcount; ++i) {
+    Dwarf_Half attrcode;
+    if (dwarf_whatattr(attrs[i], &attrcode, &err) != DW_DLV_OK)
+      db_print("Error: DWARF whatattr");
+
+    if (attrcode == DW_AT_low_pc) {
+      dwarf_formaddr(attrs[i], &lowpc, &err);
+    }
+  }
+  Dwarf_function_information dfi = Dwarf_function_information(lowpc, die_name);
+  return dfi;
+}
+
+//List all functions in child
+list<Dwarf_function_information> Debugger::db_list_functions(Dwarf_Debug dbg) {
+  Dwarf_Unsigned cu_header_length, abbrev_offset, next_cu_header;
+  Dwarf_Half version_stamp, address_size;
+  Dwarf_Error err;
+  Dwarf_Die no_die = 0, cu_die, child_die;
+  list<Dwarf_function_information> addresses;
+
+  //Compilation Unit header
+  if (dwarf_next_cu_header(
+          dbg,
+          &cu_header_length,
+          &version_stamp,
+          &abbrev_offset,
+          &address_size,
+          &next_cu_header,
+          &err) == DW_DLV_ERROR)
+    db_print("Error: no DWARF CU header");
+
+  //Find sibling of CU - the DIE
+  if (dwarf_siblingof(dbg, no_die, &cu_die, &err) == DW_DLV_ERROR)
+    db_print("Error: no sibling of CU");
+
+  //Children of the CU DIE
+  if (dwarf_child(cu_die, &child_die, &err) == DW_DLV_ERROR)
+    db_print("Error: no child of CU DIE");
+
+  //Check all child DIEs
+  while (1) {
+    int rc;
+    addresses.push_back(db_find_function(child_die));
+
+    rc = dwarf_siblingof(dbg, child_die, &child_die, &err);
+
+    if (rc == DW_DLV_ERROR)
+      db_print("Error: no sibling of DIE");
+    else if (rc == DW_DLV_NO_ENTRY) { //no more siblings
+      break;
+    }
+  }
+  return addresses;
+}
 
 //Returns Relative Instruction Pointer of child (for x64)
 unsigned long Debugger::get_rip(pid_t pid) {
@@ -63,10 +156,36 @@ void Debugger::disable_bp(Breakpoint *bp) {
   db_print("Data restored: 0x%lx, at 0x%08X\n", bp->get_data(), bp->get_address());
 }
 
+unsigned long Debugger::db_find_addr(Dwarf_Debug dbg) {
+  unsigned long return_addr = 0;
+  list<Dwarf_function_information> all_functions = db_list_functions(dbg);
+
+  while (1) {
+    string input;
+    cout << "Please type the name of the function you wish to start at. Press e to exit." << endl;
+    cin >> input;
+    if (input.compare("e") == 0) {
+      db_print("Exiting\n");
+      exit(1);
+    }
+    for (Dwarf_function_information function : all_functions) {
+      if (function.name != 0 && input.compare(function.name) == 0) {
+        return function.addr;
+      }
+    }
+    if (return_addr == 0) {
+      db_print("Error: no such function.\n");
+    }
+  }
+  db_print("Returning: 0x%lx\n", return_addr);
+  return return_addr;
+}
+
 //Run debugger
-void Debugger::db_run(pid_t child_pid, int step_type) {
+void Debugger::db_run(pid_t child_pid, int step_type, Dwarf_Debug dbg) {
   int wait_status;
   db_print("Debugger started\n");
+  Dwarf_Error err;
 
   if (step_type == 0) {
     db_run_single(child_pid);
@@ -76,9 +195,11 @@ void Debugger::db_run(pid_t child_pid, int step_type) {
   wait(&wait_status);
   db_print("Child started at: RIP = 0x%08x\n", get_rip(child_pid));
 
-  //TODO: dynamic addresses
   //unsigned long addr = 0x400727; //0x400727 for main on debuggee
-  unsigned long addr = 0x400080; //first line in hello
+  //unsigned long addr = 0x400080; //first line in hello
+  //unsigned long addr = 0x40079b; //40079b main in test.cpp
+
+  unsigned long addr = db_find_addr(dbg);
 
   db_print("Original data at 0x%08X: 0x%lx\n", addr, ptrace(PTRACE_PEEKTEXT, child_pid, (void *)addr, 0) & 0xff);
 
@@ -119,6 +240,10 @@ void Debugger::db_run(pid_t child_pid, int step_type) {
       return;
     } else if (strcmp(input, "e") == 0) {
       cout << "Exiting" << endl;
+      if (dwarf_finish(dbg, &err) != DW_DLV_OK) {
+        fprintf(stderr, "Failed DWARF finalization\n");
+        exit(1);
+      }
       exit(0);
     } else {
       cout << "Invalid input. Try again." << endl;
@@ -132,7 +257,7 @@ void Debugger::db_run_single(pid_t child_pid) {
 
   cout << "Press n for next line and e to exit. Alternatively continue(c)" << endl;
   char input[1];
-  while (1) {
+  while (1) { //is this needed?
     wait(&wait_status);
     db_print("Child is at: RIP = 0x%08x\n", get_rip(child_pid));
     if (WIFEXITED(wait_status)) {
