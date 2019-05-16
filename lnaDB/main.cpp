@@ -28,9 +28,7 @@ void launch(char **argv, int launch_type, Dwarf_Debug dbg) {
   }
 }
 
-//TODO: an own dwarf init function
 int main(int argc, char **argv) {
-
   if (argc < 2) {
     fprintf(stderr, "Expected a program name as argument\n");
     return -1;
@@ -54,7 +52,7 @@ int main(int argc, char **argv) {
 
   while (1) {
     char input[1];
-    cout << "Welcome to lnaDb. Would you like to single-step(s) or go to breakpoint(b)? Press e to exit." << endl;
+    cout << "Welcome to lnaDB. Would you like to single-step(s) or go to breakpoint(b)? Press e to exit." << endl;
     cin >> input;
 
     if (strcmp(input, "s") == 0) {

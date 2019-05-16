@@ -195,10 +195,7 @@ void Debugger::db_run(pid_t child_pid, int step_type, Dwarf_Debug dbg) {
   wait(&wait_status);
   db_print("Child started at: RIP = 0x%08x\n", get_rip(child_pid));
 
-  //unsigned long addr = 0x400727; //0x400727 for main on debuggee
-  //unsigned long addr = 0x400080; //first line in hello
-  //unsigned long addr = 0x40079b; //40079b main in test.cpp
-
+  //Dynamically find address
   unsigned long addr = db_find_addr(dbg);
 
   db_print("Original data at 0x%08X: 0x%lx\n", addr, ptrace(PTRACE_PEEKTEXT, child_pid, (void *)addr, 0) & 0xff);
@@ -206,8 +203,8 @@ void Debugger::db_run(pid_t child_pid, int step_type, Dwarf_Debug dbg) {
   //Create and enable breakpoint
   Breakpoint *bp = new Breakpoint(child_pid, (void *)addr);
   enable_bp(bp);
-  db_print("Breakpoint created at address = 0x%08X\n", bp->get_address());
-  db_print("New data at 0x%08x: 0x%lx\n", bp->get_address(), (ptrace(PTRACE_PEEKTEXT, child_pid, bp->get_address(), 0)));
+  //db_print("Breakpoint created at address = 0x%08X\n", bp->get_address());
+  //db_print("New data at 0x%08x: 0x%lx\n", bp->get_address(), (ptrace(PTRACE_PEEKTEXT, child_pid, bp->get_address(), 0)));
 
   //Continue running to breakpoint
   ptrace(PTRACE_CONT, child_pid, 0, 0);
@@ -219,7 +216,7 @@ void Debugger::db_run(pid_t child_pid, int step_type, Dwarf_Debug dbg) {
     return;
   }
 
-  db_print("Child stopped at breakpoint. RIP = 0x%08X\n", get_rip(child_pid));
+  //db_print("Child stopped at breakpoint. RIP = 0x%08X\n", get_rip(child_pid));
 
   while (1) {
     cout << "Would you like to continue(c) or single-step(s) from here? Press e to exit." << endl;
@@ -264,8 +261,6 @@ void Debugger::db_run_single(pid_t child_pid) {
       cout << "Program ended." << endl;
       exit(0);
     }
-
-    //TODO:print out information about
 
     while (1) {
       cin >> input;
